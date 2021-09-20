@@ -1,23 +1,29 @@
+// mutex::try_lock example
 #include <iostream>       // std::cout
-#include <thread>         // std::thread, std::this_thread::sleep_for
-#include <chrono>         // std::chrono::seconds
+#include <thread>         // std::thread
+#include <mutex>          // std::mutex
 
-void pause_thread(int n)
-{
-	std::this_thread::sleep_for(std::chrono::seconds(n));
-	std::cout << "pause of " << n << " seconds ended\n";
+volatile int counter(0); // non-atomic counter
+std::mutex mtx;           // locks access to counter
+
+void attempt_10k_increases() {
+    for (int i = 0; i < 10000; ++i) {
+        if (mtx.try_lock()) {   // only increase if currently not locked:
+            ++counter;
+            mtx.unlock();
+        }
+    }
 }
 
 int main()
 {
-	std::cout << "Spawning and detaching 3 threads...\n";
-	std::thread(pause_thread, 1).detach();
-	std::thread(pause_thread, 2).detach();
-	std::thread(pause_thread, 3).detach();
-	std::cout << "Done spawning threads.\n";
+    std::thread threads[4];
+    // spawn 10 threads:
+    for (int i = 0; i < 4; ++i)
+        threads[i] = std::thread(attempt_10k_increases);
 
-	std::cout << "(the main thread will now pause for 5 seconds)\n";
-	// give the detached threads time to finish (but not guaranteed!):
-	pause_thread(5);
-	return 0;
+    for (auto& th : threads) th.join();
+    std::cout << counter << " successful increases of the counter.\n";
+
+    return 0;
 }
